@@ -81,10 +81,9 @@ An `EventEmitter` instance which can be bound to in order to retrieve events.
 
 Events fired:
 
-| Event             | Called as | Description                                                                              |
-|-------------------|-----------|------------------------------------------------------------------------------------------|
-| `routeInit`       | `(path)`  | Fired when a new route is registered                                                     |
-| `routeHit`        | `(req)`   | Fired when a route is requested that is handled by route-cache                           |
-| `routeServed`     | `(req)`   | Fired when a route is requested, a valid cache does not exist and it will be served      |
-| `routePostServed` | `(req)`   | Fired after a route is requested, a valid cache does not exist and has been served       |
-| `routeCacheServe` | `(req)`   | Fired when a route is requested but a cached version exists and will be provided instead |
+| Event                  | Called as    | Description                                                                              |
+|------------------------|--------------|------------------------------------------------------------------------------------------|
+| `routeCacheHit`        | `(req)`      | Fired when a route is requested that is handled by route-cache                           |
+| `routeCacheHashError`  | `(err, req)` | Fired when a route hashing system fails                                                  |
+| `routeCacheExisting`   | `(req)`      | Fired when a route is requested, a cached version exists and will be provided instead of recomputing the result |
+| `routeCacheFresh`      | `(req)`      | Fired when a route is requested, a valid cache does not exist and we need to compute the result |

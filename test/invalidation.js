@@ -33,6 +33,19 @@ describe('Cache invalidation', ()=> {
 		});
 	});
 
+	var events = {
+		routeCacheHit: [],
+		routeCacheHashError: [],
+		routeCacheExisting: [],
+		routeCacheFresh: [],
+	};
+	before(() => {
+		emc.events.on('routeCacheHit', req => events.routeCacheHit.push(req));
+		emc.events.on('routeCacheHashError', (req, err) => events.routeCacheHit.push(err));
+		emc.events.on('routeCacheExisting', req => events.routeCacheExisting.push(req));
+		emc.events.on('routeCacheFresh', req => events.routeCacheFresh.push(req));
+	});
+
 	after(function(finish) {
 		server.close(finish);
 	});
@@ -82,6 +95,13 @@ describe('Cache invalidation', ()=> {
 				expect(res.body.random).to.equal(lastRes.random);
 				done();
 			});
+	});
+
+	it('should have fired the correct number of event handlers', ()=> {
+		expect(events.routeCacheHit).to.have.length(4);
+		expect(events.routeCacheHashError).to.have.length(0);
+		expect(events.routeCacheExisting).to.have.length(2);
+		expect(events.routeCacheFresh).to.have.length(2);
 	});
 
 });

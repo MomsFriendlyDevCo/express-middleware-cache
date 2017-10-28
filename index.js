@@ -1,5 +1,6 @@
 var _ = require('lodash');
 var cache = require('@momsfriendlydevco/cache');
+var events = require('events');
 var timestring = require('timestring');
 
 /**
@@ -43,13 +44,19 @@ var emc = function(duration, options) {
 	// }}}
 
 	return function(req, res, next) {
+		// Emit: routeCacheHit(req) {{{
+		emc.events.emit('routeCacheHit', req);
+		// }}}
+
 		var hash = settings.cache.hash(settings.hashObject(req));
 
 		settings.cache.get(hash, settings.cacheFallback, (err, cacheRes) => {
 			if (err) {
 				console.log('Error while computing hash', err);
+				emc.events.emit('routeCacheHashError', err, req);
 				return res.sendStatus(500);
 			} else if (cacheRes !== settings.cacheFallback) { // Got a hit
+				emc.events.emit('routeCacheExisting', req);
 				res.send(cacheRes);
 			} else { // No cache object - allow request to pass though
 				// Replace res.json() with our own handler {{{
@@ -61,6 +68,7 @@ var emc = function(duration, options) {
 					// }}}
 
 					settings.cache.set(hash, arguments[0], new Date(Date.now() + settings.durationMS), err => {
+						emc.events.emit('routeCacheFresh', req);
 						oldJSONHandler.apply(this, arguments); // Let the downstream serve the data as needed
 					});
 				};
@@ -71,6 +79,7 @@ var emc = function(duration, options) {
 		});
 	};
 };
+
 
 /**
 * Default options to use when initalizing new EMC factories
@@ -123,5 +132,11 @@ emc.invalidate = (...tags) => {
 */
 emc.tagStore = {};
 
+
+/**
+* Bindable EventEmitter which can receive EMC events
+* @var {EventEmitter}
+*/
+emc.events = new events.EventEmitter();
 
 module.exports = emc;
