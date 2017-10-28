@@ -13,7 +13,7 @@ var server;
 var port = 8181;
 var url = 'http://localhost:' + port;
 
-describe('express-middleware-cache', ()=> {
+describe('Basic cache setup', ()=> {
 
 	// Express Setup {{{
 	before(function(finish) {
