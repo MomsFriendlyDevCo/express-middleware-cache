@@ -31,6 +31,17 @@ var emc = function(duration, options) {
 	settings.cache = new cache(settings.cache);
 	// }}}
 
+	// Store the settings object in emc.tagStore if it has a valid tag/tags {{{
+	var tag = settings.tag || settings.tags;
+	if (tag) {
+		settings.hashes = []; // Make storage for hashes (used to remember/forget future cache storage on .invalidate() calls)
+		_.castArray(tag).forEach(tag => {
+			if (! emc.tagStore[tag]) emc.tagStore[tag] = [];
+			emc.tagStore[tag].push(settings);
+		});
+	}
+	// }}}
+
 	return function(req, res, next) {
 		var hash = settings.cache.hash(settings.hashObject(req));
 
@@ -45,6 +56,10 @@ var emc = function(duration, options) {
 				var oldJSONHandler = res.json;
 				var servedJSON;
 				res.json = function() {
+					// Are we storing hashes against tags? In which case we need to stash the hash we're about to set so we can forget it on demand {{{
+					if (settings.hashes) settings.hashes.push(hash);
+					// }}}
+
 					settings.cache.set(hash, arguments[0], new Date(Date.now() + settings.durationMS), err => {
 						oldJSONHandler.apply(this, arguments); // Let the downstream serve the data as needed
 					});
@@ -76,6 +91,37 @@ emc.defaults = {
 	}),
 	cacheFallback: '!!NOCACHE!!', // Dummy value used via @momsfriendlydevco/cache that ensures the return has no value (as the undefined is a valid return for a cache result)
 };
+
+
+/**
+* Invalidate all matching tags - effectively clearing the internal cache for anything matching the query
+* @param {array|string} ...tags The tag or tag strings to match against
+* @return {number} The number of cache hashes cleared (this does not necessarily equal the number of items removed from memory as some of the cleared items may already have expired depending on the individual cache modules used)
+*/
+emc.invalidate = (...tags) => {
+	var cleared = 0;
+
+	tags.forEach(tag => {
+		if (!emc.tagStore[tag]) return; // Tag doesn't exist anyway
+		emc.tagStore[tag].forEach(store => {
+			if (!store.hashes) return;
+			store.hashes.forEach(hash => {
+				store.cache.unset(hash);
+				cleared++;
+			});
+		});
+	});
+
+	return cleared;
+};
+
+
+/**
+* Storage for EMC objects against tags
+* Each key is the tag which contains an array of matching EMC objects against that tag
+* @var {Object}
+*/
+emc.tagStore = {};
 
 
 module.exports = emc;
