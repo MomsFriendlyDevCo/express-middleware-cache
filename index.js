@@ -4,22 +4,13 @@ var timestring = require('timestring');
 
 /**
 * Factory function which returns a caching object which returns an the Expres function
+* @param {string} [duration] timestring compatible duration to cache for (sets options.duration)
+* @param {Object} [options] Additional options to use, overrides emc.defaults
+* @see emc.defaults
 */
-module.exports = function(duration, options) {
-	var settings = {
-		duration: '1h', // Human parsable duration
-		durationMS: 1000 * 60 * 60, // Parsed version of duration in MS
-		cache: {}, // Options passed to @momsfriendlydevco/cache
-		hashObject: req => ({ // How to extract the request keys to hash
-			method: req.method,
-			path: req.path,
-			query: req.query,
-			body: req.body,
-		}),
-		cacheFallback: '!!NOCACHE!!', // Fallback value passed to cache (ensures that undefined is a valid return)
-	};
-
-	// Argument mangling {{{
+var emc = function(duration, options) {
+	// Argument mangling (sets `settings`) {{{
+	var settings = _.clone(emc.defaults);
 	if (_.isObject(duration)) { // Given object
 		_.merge(settings, duration);
 	} else if (_.isString(duration) && _.isObject(options)) { // Given string + object, assume duration + settings
@@ -65,3 +56,26 @@ module.exports = function(duration, options) {
 		});
 	};
 };
+
+/**
+* Default options to use when initalizing new EMC factories
+* @var {Object}
+* @param {string} [options.duration] Timestring compatible duration to cache the response for
+* @param {Object} [options.cache] Options passed to @momsfriendlydevco/cache to initalize a cache object
+* @param {function} [options.hashObject] Method which returns the hashable object to use as the key in the cache. Defaults to hashing `req.{method,path,query,body}`
+*/
+emc.defaults = {
+	duration: '1h', // Human parsable duration
+	durationMS: 1000 * 60 * 60, // Parsed version of duration in MS
+	cache: {}, // Options passed to @momsfriendlydevco/cache
+	hashObject: req => ({ // How to extract the request keys to hash
+		method: req.method,
+		path: req.path,
+		query: req.query,
+		body: req.body,
+	}),
+	cacheFallback: '!!NOCACHE!!', // Dummy value used via @momsfriendlydevco/cache that ensures the return has no value (as the undefined is a valid return for a cache result)
+};
+
+
+module.exports = emc;

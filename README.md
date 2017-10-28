@@ -53,12 +53,13 @@ Object containing any future caching objects options.
 
 Supported options:
 
-| Option     | Type               | Default              | Description                                                                                       |
-|------------|--------------------|----------------------|---------------------------------------------------------------------------------------------------|
-| `methods`  | `array`            | `['memory']`         | What methods to try to obtain a cache - see FIXME for a list of supported plugins                 |
-| `tag`      | `string` / `array` | `''`                 | Optional tag or tags to associate with the cache. These can be used to invalidate the cache later |
-| `tags`     | `string` / `array` | `''`                 | Alias of `tag`                                                                                    |
-| Additional | Mixed              |                      | Any additional options are passed to FIXME to configure cache methods                             |
+| Option       | Type               | Default              | Description                                                                                       |
+|--------------|--------------------|----------------------|---------------------------------------------------------------------------------------------------|
+| `duration`   | `string`           | `1h`                 | Default duration to cache for                                                                     |
+| `cache`      | `object`           | `{}`                 | Options passed to [@momsfriendlydevco/cache](https://github.com/MomsFriendlyDevCo/generic-cache) to setup a cache instance |
+| `hashObject` | `function`         | Complex              | Method which returns the hashable object to use as the key in the cache. Defaults to hashing `req.{method,path,query,body}` |
+| `tag`        | `string` / `array` | `''`                 | Optional tag or tags to associate with the cache. These can be used to invalidate the cache later |
+| `tags`       | `string` / `array` | `''`                 | Alias of `tag`                                                                                    |
 
 
 
