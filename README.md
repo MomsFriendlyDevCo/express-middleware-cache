@@ -89,6 +89,7 @@ Events fired:
 | `routeCacheEtag`       | `(req, info)` | The client requested the current hash via the `etag` header and will be served a 304 "Not Modified" response |
 | `routeCacheExisting`   | `(req, info)` | Fired when a route is requested, a cached version exists and will be provided instead of recomputing the result |
 | `routeCacheFresh`      | `(req, info)` | Fired when a route is requested, a valid cache does not exist and we need to compute the result |
+| `routeCacheInvalidate` | `(tag, hash)` | Fired when a single tag is invalidated                                                   |
 
 The info object contains the following structure:
 
