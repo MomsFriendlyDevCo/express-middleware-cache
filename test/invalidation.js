@@ -36,12 +36,14 @@ describe('Cache invalidation', ()=> {
 	var events = {
 		routeCacheHit: [],
 		routeCacheHashError: [],
+		routeCacheEtag: [],
 		routeCacheExisting: [],
 		routeCacheFresh: [],
 	};
 	before(() => {
 		emc.events.on('routeCacheHit', req => events.routeCacheHit.push(req));
 		emc.events.on('routeCacheHashError', (req, err) => events.routeCacheHit.push(err));
+		emc.events.on('routeCacheEtag', req => events.routeCacheEtag.push(req));
 		emc.events.on('routeCacheExisting', req => events.routeCacheExisting.push(req));
 		emc.events.on('routeCacheFresh', req => events.routeCacheFresh.push(req));
 	});
@@ -57,7 +59,7 @@ describe('Cache invalidation', ()=> {
 			.end((err, res) => {
 				expect(err).to.not.be.ok;
 				expect(res.body).to.have.property('random');
-				lastRes = res.body;
+				lastRes = res;
 				done();
 			});
 	});
@@ -66,8 +68,33 @@ describe('Cache invalidation', ()=> {
 		superagent.get(`${url}/cache/1h`)
 			.end((err, res) => {
 				expect(err).to.not.be.ok;
+				expect(res.statusCode).to.be.equal(200);
 				expect(res.body).to.have.property('random');
-				expect(res.body.random).to.equal(lastRes.random);
+				expect(res.headers).to.have.property('etag');
+				expect(res.body.random).to.equal(lastRes.body.random);
+				done();
+			});
+	});
+
+	it('should get the same response if provided with the same etag', done => {
+		superagent.get(`${url}/cache/1h`)
+			.set('etag', lastRes.headers.etag)
+			.end((err, res) => {
+				expect(err).to.be.ok; // Not modified
+				expect(res.statusCode).to.be.equal(304);
+				expect(res.body).to.be.deep.equal({});
+				done();
+			});
+	});
+
+	it('should get a full response if provided with a different etag', done => {
+		superagent.get(`${url}/cache/1h`)
+			.set('etag', 'nonsense-etag')
+			.end((err, res) => {
+				expect(err).to.not.be.ok;
+				expect(res.statusCode).to.be.equal(200);
+				expect(res.body).to.have.property('random');
+				expect(res.body.random).to.equal(lastRes.body.random);
 				done();
 			});
 	});
@@ -81,8 +108,8 @@ describe('Cache invalidation', ()=> {
 			.end((err, res) => {
 				expect(err).to.not.be.ok;
 				expect(res.body).to.have.property('random');
-				expect(res.body.random).to.not.equal(lastRes.random);
-				lastRes = res.body;
+				expect(res.body.random).to.not.equal(lastRes.body.random);
+				lastRes = res;
 				done();
 			});
 	});
@@ -92,15 +119,16 @@ describe('Cache invalidation', ()=> {
 			.end((err, res) => {
 				expect(err).to.not.be.ok;
 				expect(res.body).to.have.property('random');
-				expect(res.body.random).to.equal(lastRes.random);
+				expect(res.body.random).to.equal(lastRes.body.random);
 				done();
 			});
 	});
 
 	it('should have fired the correct number of event handlers', ()=> {
-		expect(events.routeCacheHit).to.have.length(4);
+		expect(events.routeCacheHit).to.have.length(6);
 		expect(events.routeCacheHashError).to.have.length(0);
-		expect(events.routeCacheExisting).to.have.length(2);
+		expect(events.routeCacheEtag).to.have.length(1);
+		expect(events.routeCacheExisting).to.have.length(3);
 		expect(events.routeCacheFresh).to.have.length(2);
 	});
 

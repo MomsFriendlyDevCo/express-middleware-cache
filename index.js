@@ -50,13 +50,25 @@ var emc = function(duration, options) {
 
 		var hash = settings.cache.hash(settings.hashObject(req));
 
+		if (settings.etag && req.headers.etag && req.headers.etag == hash) { // Passed an etag and it matches the current hash - serve a 304 instead
+			emc.events.emit('routeCacheEtag', req, {
+				isFresh: false,
+				hash: hash,
+			});
+			return res.sendStatus(304);
+		}
+
 		settings.cache.get(hash, settings.cacheFallback, (err, cacheRes) => {
 			if (err) {
 				console.log('Error while computing hash', err);
 				emc.events.emit('routeCacheHashError', err, req);
 				return res.sendStatus(500);
 			} else if (cacheRes !== settings.cacheFallback) { // Got a hit
-				emc.events.emit('routeCacheExisting', req);
+				emc.events.emit('routeCacheExisting', req, {
+					isFresh: false,
+					hash: hash,
+				});
+				if (settings.etag) res.set('etag', hash);
 				res.send(cacheRes);
 			} else { // No cache object - allow request to pass though
 				// Replace res.json() with our own handler {{{
@@ -68,7 +80,11 @@ var emc = function(duration, options) {
 					// }}}
 
 					settings.cache.set(hash, arguments[0], new Date(Date.now() + settings.durationMS), err => {
-						emc.events.emit('routeCacheFresh', req);
+						emc.events.emit('routeCacheFresh', req, {
+							isFresh: true,
+							hash: hash,
+						});
+						if (settings.etag) res.set('etag', hash);
 						oldJSONHandler.apply(this, arguments); // Let the downstream serve the data as needed
 					});
 				};
@@ -84,9 +100,10 @@ var emc = function(duration, options) {
 /**
 * Default options to use when initalizing new EMC factories
 * @var {Object}
-* @param {string} [options.duration] Timestring compatible duration to cache the response for
-* @param {Object} [options.cache] Options passed to @momsfriendlydevco/cache to initalize a cache object
-* @param {function} [options.hashObject] Method which returns the hashable object to use as the key in the cache. Defaults to hashing `req.{method,path,query,body}`
+* @param {string} [defaults.duration] Timestring compatible duration to cache the response for
+* @param {Object} [defaults.cache] Options passed to @momsfriendlydevco/cache to initalize a cache object
+* @param {function} [defaults.hashObject] Method which returns the hashable object to use as the key in the cache. Defaults to hashing `req.{method,path,query,body}`
+* @param {boolean} [defaults.etag] Transmit an etag header when sending the cache to the client
 */
 emc.defaults = {
 	duration: '1h', // Human parsable duration
@@ -99,6 +116,7 @@ emc.defaults = {
 		body: req.body,
 	}),
 	cacheFallback: '!!NOCACHE!!', // Dummy value used via @momsfriendlydevco/cache that ensures the return has no value (as the undefined is a valid return for a cache result)
+	etag: true,
 };
 
 

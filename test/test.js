@@ -61,6 +61,7 @@ describe('Basic cache setup', ()=> {
 				.end((err, resOne) => {
 					expect(err).to.not.be.ok;
 					expect(resOne.body).to.have.property('random');
+					expect(resOne.headers).to.have.property('etag');
 
 					mlog.log(`second request (within cache range, last result = ${resOne.body.random})`)
 					superagent.get(time.url)
@@ -68,6 +69,8 @@ describe('Basic cache setup', ()=> {
 							expect(err).to.not.be.ok;
 							expect(resTwo.body).to.have.property('random');
 							expect(resTwo.body.random).to.equal(resOne.body.random);
+							expect(resTwo.headers).to.have.property('etag');
+							expect(resTwo.headers.etag).to.equal(resOne.headers.etag);
 
 							setTimeout(()=> {
 								mlog.log('third request (after cache range)')
@@ -76,6 +79,8 @@ describe('Basic cache setup', ()=> {
 										expect(err).to.not.be.ok;
 										expect(resThree.body).to.have.property('random');
 										expect(resThree.body.random).to.not.equal(resOne.body.random);
+										expect(resThree.headers).to.have.property('etag');
+										expect(resThree.headers.etag).to.not.equal(resTwo.headers.etag);
 
 										done();
 									});

@@ -7,6 +7,7 @@ Features:
 
 * Easy to use syntax - Specify cache times in shorthand durations such as `app.get('/some/api', cache('1h'), (req, res) => ...)`
 * Cache invalidation - Provide a tag for your cache setup and quickly invalidate all matching routes if necessary
+* Etag support - Allows the client to make a request by the server generated hash and recieve either a code 200 (with data) or a 304 (Not Modified) response without actually making a full request
 * Pluggable interface - Not just in-memory storage! Add any FIXME plugin to hold cache contents over server restarts
 
 
@@ -81,9 +82,18 @@ An `EventEmitter` instance which can be bound to in order to retrieve events.
 
 Events fired:
 
-| Event                  | Called as    | Description                                                                              |
-|------------------------|--------------|------------------------------------------------------------------------------------------|
-| `routeCacheHit`        | `(req)`      | Fired when a route is requested that is handled by route-cache                           |
-| `routeCacheHashError`  | `(err, req)` | Fired when a route hashing system fails                                                  |
-| `routeCacheExisting`   | `(req)`      | Fired when a route is requested, a cached version exists and will be provided instead of recomputing the result |
-| `routeCacheFresh`      | `(req)`      | Fired when a route is requested, a valid cache does not exist and we need to compute the result |
+| Event                  | Called as     | Description                                                                              |
+|------------------------|---------------|------------------------------------------------------------------------------------------|
+| `routeCacheHit`        | `(req)`       | Fired when a route is requested that is handled by route-cache                           |
+| `routeCacheHashError`  | `(err, req)`  | Fired when a route hashing system fails                                                  |
+| `routeCacheEtag`       | `(req, info)` | The client requested the current hash via the `etag` header and will be served a 304 "Not Modified" response |
+| `routeCacheExisting`   | `(req, info)` | Fired when a route is requested, a cached version exists and will be provided instead of recomputing the result |
+| `routeCacheFresh`      | `(req, info)` | Fired when a route is requested, a valid cache does not exist and we need to compute the result |
+
+The info object contains the following structure:
+
+| Key       | Type      | Description                                                            |
+|-----------|-----------|------------------------------------------------------------------------|
+| `isFresh` | `boolean` | Whether the cache response was generated for this specific request     |
+| `hash`    | `string`  | The internal, unqiue hashing value used to identify this cache session |
+
