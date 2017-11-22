@@ -133,7 +133,7 @@ emc.invalidate = (...tags) => {
 		emc.tagStore[tag].forEach(store => {
 			if (!store.hashes) return;
 			store.hashes.forEach(hash => {
-				emc.emit('routeCacheInvalidate', tag, hash);
+				emc.events.emit('routeCacheInvalidate', tag, hash);
 				store.cache.unset(hash);
 				cleared++;
 			});
