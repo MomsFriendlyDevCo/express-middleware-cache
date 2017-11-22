@@ -1,6 +1,6 @@
 {
   "name": "express-middleware-cache",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Express caching middleware using Memory/MemcacheD/Mongo etc.",
   "main": "index.js",
   "scripts": {
