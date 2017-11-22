@@ -24,16 +24,16 @@
   },
   "homepage": "https://github.com/MomsFriendlyDevCo/express-middleware-cache#readme",
   "dependencies": {
-    "@momsfriendlydevco/cache": "0.0.2",
+    "@momsfriendlydevco/cache": "1.0.1",
     "timestring": "^5.0.0"
   },
   "devDependencies": {
     "body-parser": "^1.18.2",
     "chai": "^4.1.2",
     "express": "^4.16.2",
-    "express-log-url": "^1.1.0",
+    "express-log-url": "^1.2.1",
     "mocha": "^4.0.1",
     "mocha-logger": "^1.0.5",
-    "superagent": "^3.6.3"
+    "superagent": "^3.8.1"
   }
 }
