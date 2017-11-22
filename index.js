@@ -50,26 +50,24 @@ var emc = function(duration, options) {
 
 		var hash = settings.cache.hash(settings.hashObject(req));
 
-		if (settings.etag && req.headers.etag && req.headers.etag == hash) { // Passed an etag and it matches the current hash - serve a 304 instead
-			emc.events.emit('routeCacheEtag', req, {
-				isFresh: false,
-				hash: hash,
-			});
-			return res.sendStatus(304);
-		}
-
 		settings.cache.get(hash, settings.cacheFallback, (err, cacheRes) => {
 			if (err) {
 				console.log('Error while computing hash', err);
 				emc.events.emit('routeCacheHashError', err, req);
 				return res.sendStatus(500);
+			} else if (settings.etag && req.headers.etag && cacheRes !== settings.cacheFallback && cacheRes.etag && cacheRes.etag == req.headers.etag) { // User is supplying an etag - compare it agasint the one we have cached
+				emc.events.emit('routeCacheEtag', req, {
+					isFresh: false,
+					hash: hash,
+				});
+				return res.sendStatus(304);
 			} else if (cacheRes !== settings.cacheFallback) { // Got a hit
 				emc.events.emit('routeCacheExisting', req, {
 					isFresh: false,
 					hash: hash,
 				});
-				if (settings.etag) res.set('etag', hash);
-				res.send(cacheRes);
+				if (settings.etag) res.set('etag', cacheRes.etag);
+				res.send(cacheRes.content);
 			} else { // No cache object - allow request to pass though
 				// Replace res.json() with our own handler {{{
 				var oldJSONHandler = res.json;
@@ -79,14 +77,23 @@ var emc = function(duration, options) {
 					if (settings.hashes) settings.hashes.push(hash);
 					// }}}
 
-					settings.cache.set(hash, arguments[0], new Date(Date.now() + settings.durationMS), err => {
-						emc.events.emit('routeCacheFresh', req, {
-							isFresh: true,
-							hash: hash,
-						});
-						if (settings.etag) res.set('etag', hash);
-						oldJSONHandler.apply(this, arguments); // Let the downstream serve the data as needed
-					});
+					var etag = emc.generateEtag(hash, settings);
+					settings.cache.set(
+						hash,
+						{
+							content: arguments[0],
+							etag: etag,
+						},
+						new Date(Date.now() + settings.durationMS),
+						err => {
+							emc.events.emit('routeCacheFresh', req, {
+								isFresh: true,
+								hash: hash,
+							});
+							if (settings.etag) res.set('etag', etag);
+							oldJSONHandler.apply(this, arguments); // Let the downstream serve the data as needed
+						}
+					);
 				};
 				// }}}
 
@@ -141,6 +148,19 @@ emc.invalidate = (...tags) => {
 	});
 
 	return cleared;
+};
+
+
+/**
+* Generate a 'fresh' etag based on the given hash result
+* This should take the hash, add some entropy and return the result
+* This function can be replaed with another entropy generating system if required
+* @param {string} hash The hash generated for the request
+* @param {Object} settings Settings objected used by the upstream hashing component
+* @return {string} The new etag to use
+*/
+emc.generateEtag = (hash, settings) => {
+	return settings.cache.hash(hash + '-' + Date.now());
 };
 
 

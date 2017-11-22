@@ -57,51 +57,59 @@ describe('Basic cache setup', ()=> {
 			this.timeout(time.max);
 
 			var responses = [];
-			it(`should make the initial request < ${time.min} (uncached)`, function(done) {
+			it(`should make the initial request < ${time.min} (uncached)`, done => {
 				superagent
 					.get(time.url)
 					.end((err, res) => {
-						expect(err).to.not.be.ok;
+						if (err) return done(err);
 						responses.push(res);
-						expect(res.body).to.have.property('random');
-						expect(res.headers).to.have.property('etag');
-						mlog.log(`last result = ${res.body.random}`);
 						done();
 					});
 			});
 
-			it(`should make the second request (within cache range)`, function(done) {
+			it('should have a valid response the first time', ()=> {
+				expect(responses[0].body).to.have.property('random');
+				expect(responses[0].headers).to.have.property('etag');
+			});
+
+			it(`should make the second request (within cache range)`, done => {
 				superagent
 					.get(time.url)
 					.end((err, res) => {
-						expect(err).to.not.be.ok;
+						if (err) return done(err);
 						responses.push(res);
-						expect(res.body).to.have.property('random');
-						expect(res.body.random).to.equal(responses[0].body.random);
-						expect(res.headers).to.have.property('etag');
-						expect(res.headers.etag).to.equal(responses[0].headers.etag);
 						done();
 					});
 			});
 
-			it(`should wait the invalidation period (${time.invalidate}ms)`, function(done) {
+			it('should have a valid response the second time', ()=> {
+				expect(responses[1].body).to.have.property('random');
+				expect(responses[1].body.random).to.equal(responses[0].body.random);
+				expect(responses[1].headers).to.have.property('etag');
+				expect(responses[1].headers.etag).to.equal(responses[0].headers.etag);
+			});
+
+			it(`should wait the invalidation period (${time.invalidate}ms)`, done => {
 				setTimeout(()=> done(), time.invalidate);
 			});
 
 
-			it('should make the third request (after cache range)', function(done) {
+			it('should make the third request (after cache range)', done => {
 				superagent
 					.get(time.url)
 					.end((err, res) => {
-						expect(err).to.not.be.ok;
+						if (err) return done(err);
 						responses.push(res);
-						expect(res.body).to.have.property('random');
-						expect(res.body.random).to.not.equal(responses[0].body.random);
-						expect(res.headers).to.have.property('etag');
-						// expect(res.headers.etag).to.not.equal(responses[1].headers.etag);
-						mlog.log(`this result = ${res.body.random}`);
 						done();
 					});
+			});
+
+			it('should have a valid response the third time', ()=> {
+				expect(responses[2].body).to.have.property('random');
+				expect(responses[2].body.random).to.not.equal(responses[0].body.random);
+				expect(responses[2].headers).to.have.property('etag');
+				// FIXME: Should etag be identical or different after invalidation - MC 2017-11-22
+				// expect(responses[2].headers.etag).to.not.equal(responses[1].headers.etag);
 			});
 
 		});
