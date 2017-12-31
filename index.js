@@ -29,7 +29,8 @@ var emc = function(duration, options) {
 	// }}}
 
 	// Make our caching object {{{
-	settings.cache = new cache(settings.cache);
+	settings.cache = new cache(settings.cache)
+		.on('loadedMod', mod => emc.events.emit('routeCacheCacher', mod))
 	// }}}
 
 	// Store the settings object in emc.tagStore if it has a valid tag/tags {{{

@@ -90,6 +90,7 @@ Events fired:
 | `routeCacheExisting`   | `(req, info)` | Fired when a route is requested, a cached version exists and will be provided instead of recomputing the result |
 | `routeCacheFresh`      | `(req, info)` | Fired when a route is requested, a valid cache does not exist and we need to compute the result |
 | `routeCacheInvalidate` | `(tag, hash)` | Fired when a single tag is invalidated                                                   |
+| `routeCacheCacher`     | `(driver)`    | Emitted when the upstream Cache has loaded along with the driver ID that was used        |
 
 The info object contains the following structure:
 
