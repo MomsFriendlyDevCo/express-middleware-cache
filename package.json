@@ -1,6 +1,6 @@
 {
   "name": "@momsfriendlydevco/express-middleware-cache",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Express caching middleware using Memory/MemcacheD/Mongo etc.",
   "main": "index.js",
   "scripts": {
@@ -24,7 +24,8 @@
   },
   "homepage": "https://github.com/MomsFriendlyDevCo/express-middleware-cache#readme",
   "dependencies": {
-    "@momsfriendlydevco/cache": "1.0.2",
+    "@momsfriendlydevco/cache": "^1.0.3",
+    "async-chainable": "^2.3.2",
     "timestring": "^5.0.0"
   },
   "devDependencies": {

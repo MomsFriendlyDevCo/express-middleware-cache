@@ -99,8 +99,8 @@ describe('Cache invalidation', ()=> {
 			});
 	});
 
-	it('should invalidate the cache', ()=> {
-		emc.invalidate('1h');
+	it('should invalidate the cache', done => {
+		emc.invalidate('1h', done);
 	});
 
 	it('should get a different request post-invalidation', done => {

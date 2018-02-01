@@ -54,13 +54,17 @@ Object containing any future caching objects options.
 
 Supported options:
 
-| Option       | Type               | Default              | Description                                                                                       |
-|--------------|--------------------|----------------------|---------------------------------------------------------------------------------------------------|
-| `duration`   | `string`           | `1h`                 | Default duration to cache for                                                                     |
-| `cache`      | `object`           | `{}`                 | Options passed to [@momsfriendlydevco/cache](https://github.com/MomsFriendlyDevCo/generic-cache) to setup a cache instance |
-| `hashObject` | `function`         | Complex              | Method which returns the hashable object to use as the key in the cache. Defaults to hashing `req.{method,path,query,body}` |
-| `tag`        | `string` / `array` | `''`                 | Optional tag or tags to associate with the cache. These can be used to invalidate the cache later |
-| `tags`       | `string` / `array` | `''`                 | Alias of `tag`                                                                                    |
+| Option           | Type               | Default              | Description                                                                                       |
+|------------------|--------------------|----------------------|---------------------------------------------------------------------------------------------------|
+| `duration`       | `string`           | `1h`                 | Default duration to cache for                                                                     |
+| `cache`          | `object`           | `{}`                 | Options passed to [@momsfriendlydevco/cache](https://github.com/MomsFriendlyDevCo/generic-cache) to setup a cache instance |
+| `hashObject`     | `function`         | See internals        | Method which returns the hashable object to use as the key in the cache. Defaults to hashing `req.{method,path,query,body}` |
+| `tag`            | `string` / `array` | `''`                 | Optional tag or tags to associate with the cache. These can be used to invalidate the cache later |
+| `tags`           | `string` / `array` | `''`                 | Alias of `tag`                                                                                    |
+| `etag`           | `boolean`          | `true`               | Use eTag compatible caching with backend (only refresh when the server eTag doesn't match)        |
+| `generateEtag`   | `function`         | See internals        | Function used to generate an eTag value                                                           |
+| `subscribe`      | `boolean`          | `true`               | Subscribe the returned EMC instance to the `emc.events` eventEmitter to react to gloabl events such as calls to `emc.invalidate()` |
+| `tagStorePrefix` | `string`           | `"emc-tagstore"`     | Prefix to use when caching tagStore collections                                                   |
 
 
 
@@ -82,15 +86,16 @@ An `EventEmitter` instance which can be bound to in order to retrieve events.
 
 Events fired:
 
-| Event                  | Called as     | Description                                                                              |
-|------------------------|---------------|------------------------------------------------------------------------------------------|
-| `routeCacheHit`        | `(req)`       | Fired when a route is requested that is handled by route-cache                           |
-| `routeCacheHashError`  | `(err, req)`  | Fired when a route hashing system fails                                                  |
-| `routeCacheEtag`       | `(req, info)` | The client requested the current hash via the `etag` header and will be served a 304 "Not Modified" response |
-| `routeCacheExisting`   | `(req, info)` | Fired when a route is requested, a cached version exists and will be provided instead of recomputing the result |
-| `routeCacheFresh`      | `(req, info)` | Fired when a route is requested, a valid cache does not exist and we need to compute the result |
-| `routeCacheInvalidate` | `(tag, hash)` | Fired when a single tag is invalidated                                                   |
-| `routeCacheCacher`     | `(driver)`    | Emitted when the upstream Cache has loaded along with the driver ID that was used        |
+| Event                         | Called as     | Description                                                                              |
+|-------------------------------|---------------|------------------------------------------------------------------------------------------|
+| `routeCacheHit`               | `(req)`       | Fired when a route is requested that is handled by route-cache                           |
+| `routeCacheHashError`         | `(err, req)`  | Fired when a route hashing system fails                                                  |
+| `routeCacheEtag`              | `(req, info)` | The client requested the current hash via the `etag` header and will be served a 304 "Not Modified" response |
+| `routeCacheExisting`          | `(req, info)` | Fired when a route is requested, a cached version exists and will be provided instead of recomputing the result |
+| `routeCacheFresh`             | `(req, info)` | Fired when a route is requested, a valid cache does not exist and we need to compute the result |
+| `routeCacheInvalidate`        | `(tag, hash)` | Fired when a single tag is invalidated                                                   |
+| `routeCacheCacher`            | `(driver)`    | Emitted when the upstream Cache has loaded along with the driver ID that was used        |
+| `routeCacheInvalidateRequest` | `(...tags)` | Fired by `emc.invalidate()` to all upstream EMC objects to tell them to invalidate the given tags |
 
 The info object contains the following structure:
 

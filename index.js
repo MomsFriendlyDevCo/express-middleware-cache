@@ -1,4 +1,5 @@
 var _ = require('lodash');
+var async = require('async-chainable');
 var cache = require('@momsfriendlydevco/cache');
 var events = require('events');
 var timestring = require('timestring');
@@ -33,18 +34,42 @@ var emc = function(duration, options) {
 		.on('loadedMod', mod => emc.events.emit('routeCacheCacher', mod))
 	// }}}
 
-	// Store the settings object in emc.tagStore if it has a valid tag/tags {{{
+	// Store the settings object in tagStore if it has a valid tag/tags {{{
 	var tag = settings.tag || settings.tags;
 	if (tag) {
 		settings.hashes = []; // Make storage for hashes (used to remember/forget future cache storage on .invalidate() calls)
 		_.castArray(tag).forEach(tag => {
-			if (! emc.tagStore[tag]) emc.tagStore[tag] = [];
-			emc.tagStore[tag].push(settings);
+			async()
+				// Fetch tag store {{{
+				.set('tsID', `${settings.tagStorePrefix}-${tag}`)
+				.then('store', function(next) {
+					settings.cache.get(this.tsID, [], next);
+				})
+				// }}}
+				// Append to it {{{
+				.then(function(next) {
+					this.store.push(settings);
+					next();
+				})
+				// }}}
+				// Save it back {{{
+				.then(function(next) {
+					settings.cache.set(this.tsID, this.store, next);
+				})
+				// }}}
+				.end();
 		});
 	}
 	// }}}
 
-	return function(req, res, next) {
+
+	/**
+	* Main emcInstance worker
+	* @param {Object} req The ExpressJS compatible request object
+	* @param {Object} res The ExpressJS comaptible response object
+	* @param {function} next The upstream callback to pass control to the next middleware
+	*/
+	var emcInstance = function(req, res, next) {
 		// Emit: routeCacheHit(req) {{{
 		emc.events.emit('routeCacheHit', req);
 		// }}}
@@ -78,7 +103,7 @@ var emc = function(duration, options) {
 					if (settings.hashes) settings.hashes.push(hash);
 					// }}}
 
-					var etag = emc.generateEtag(hash, settings);
+					var etag = settings.generateEtag(hash, settings);
 					settings.cache.set(
 						hash,
 						{
@@ -102,6 +127,53 @@ var emc = function(duration, options) {
 			}
 		});
 	};
+
+	/**
+	* Invalidate all matching tags - effectively clearing the internal cache for anything matching the query
+	* @param {array|string} tags The tag or tag strings to match against
+	* @param {function} cb Callback to call as (err, clearedCount) when complete
+	* @return {number} The number of cache hashes cleared (this does not necessarily equal the number of items removed from memory as some of the cleared items may already have expired depending on the individual cache modules used)
+	*/
+	emcInstance.invalidate = (tags, cb) => {
+		var cleared = 0;
+
+		async()
+			.forEach(_.castArray(tags), function(nextTag, tag) {
+				async()
+					// Fetch tag store {{{
+					.set('tsID', `${settings.tagStorePrefix}-${tag}`)
+					.then('tagStore', function(next) {
+						settings.cache.get(this.tsID, [], next);
+					})
+					// }}}
+					 // Erase all ID's assocated with the tag {{{
+					.forEach('tagStore', function(nextStore, store) {
+						async()
+							.forEach(store.hashes, function(next, hash) {
+								store.cache.unset(hash, next);
+							})
+							.then(function(next) {
+								cleared++;
+								next();
+							})
+							.end(nextStore);
+					})
+					// }}}
+					.end(nextTag);
+			})
+			.end(err => {
+				if (_.isFunction(cb)) {
+					cb(err, cleared)
+				} else if (err) {
+					throw new Error(err);
+				}
+			});
+	};
+
+	// Subscribe to event emitter?
+	if (settings.subscribe) emc.events.on('routeCacheInvalidateRequest', (tags, cb) => emcInstance.invalidate(tags, cb));
+
+	return emcInstance;
 };
 
 
@@ -125,52 +197,18 @@ emc.defaults = {
 	}),
 	cacheFallback: '!!NOCACHE!!', // Dummy value used via @momsfriendlydevco/cache that ensures the return has no value (as the undefined is a valid return for a cache result)
 	etag: true,
+	generateEtag: (hash, settings) => settings.cache.hash(hash + '-' + Date.now()),
+	subscribe: true,
+	tagStorePrefix: 'emc-tagstore',
 };
 
 
 /**
-* Invalidate all matching tags - effectively clearing the internal cache for anything matching the query
-* @param {array|string} ...tags The tag or tag strings to match against
-* @return {number} The number of cache hashes cleared (this does not necessarily equal the number of items removed from memory as some of the cleared items may already have expired depending on the individual cache modules used)
+* Function to invoke 'invalidate' on all EMC objects subscribed to the emc.events EventEmitter
+* @param {array|string} tags Tag or tags to invalidate
+* @param {function} [cb] Optional callback to fire when complete
 */
-emc.invalidate = (...tags) => {
-	var cleared = 0;
-
-	tags.forEach(tag => {
-		if (!emc.tagStore[tag]) return; // Tag doesn't exist anyway
-		emc.tagStore[tag].forEach(store => {
-			if (!store.hashes) return;
-			store.hashes.forEach(hash => {
-				emc.events.emit('routeCacheInvalidate', tag, hash);
-				store.cache.unset(hash);
-				cleared++;
-			});
-		});
-	});
-
-	return cleared;
-};
-
-
-/**
-* Generate a 'fresh' etag based on the given hash result
-* This should take the hash, add some entropy and return the result
-* This function can be replaed with another entropy generating system if required
-* @param {string} hash The hash generated for the request
-* @param {Object} settings Settings objected used by the upstream hashing component
-* @return {string} The new etag to use
-*/
-emc.generateEtag = (hash, settings) => {
-	return settings.cache.hash(hash + '-' + Date.now());
-};
-
-
-/**
-* Storage for EMC objects against tags
-* Each key is the tag which contains an array of matching EMC objects against that tag
-* @var {Object}
-*/
-emc.tagStore = {};
+emc.invalidate = (tags, cb) => emc.events.emit('routeCacheInvalidateRequest', tags, cb);
 
 
 /**
