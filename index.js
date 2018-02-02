@@ -30,36 +30,12 @@ var emc = function(duration, options) {
 	// }}}
 
 	// Make our caching object {{{
-	settings.cache = new cache(settings.cache)
-		.on('loadedMod', mod => emc.events.emit('routeCacheCacher', mod))
-	// }}}
+	settings.cache = new cache(settings.cache, err => {
+		if (err) throw new Error('Unable to allocate cache: ' + err.toString());
+	});
 
-	// Store the settings object in tagStore if it has a valid tag/tags {{{
-	var tag = settings.tag || settings.tags;
-	if (tag) {
-		settings.hashes = []; // Make storage for hashes (used to remember/forget future cache storage on .invalidate() calls)
-		_.castArray(tag).forEach(tag => {
-			async()
-				// Fetch tag store {{{
-				.set('tsID', `${settings.tagStorePrefix}-${tag}`)
-				.then('store', function(next) {
-					settings.cache.get(this.tsID, [], next);
-				})
-				// }}}
-				// Append to it {{{
-				.then(function(next) {
-					this.store.push(settings);
-					next();
-				})
-				// }}}
-				// Save it back {{{
-				.then(function(next) {
-					settings.cache.set(this.tsID, this.store, next);
-				})
-				// }}}
-				.end();
-		});
-	}
+
+	settings.cache.on('loadedMod', mod => emc.events.emit('routeCacheCacher', mod))
 	// }}}
 
 
@@ -98,28 +74,58 @@ var emc = function(duration, options) {
 				// Replace res.json() with our own handler {{{
 				var oldJSONHandler = res.json;
 				var servedJSON;
-				res.json = function() {
-					// Are we storing hashes against tags? In which case we need to stash the hash we're about to set so we can forget it on demand {{{
-					if (settings.hashes) settings.hashes.push(hash);
-					// }}}
+				res.json = function(content) {
+					async()
+						.set('context', this)
+						// Store result in tags if we are using them {{{
+						.set('tags', _.castArray(settings.tag || settings.tags))
+						.forEach('tags', function(nextTag, tag) {
+							var tagId = `${settings.tagStorePrefix}-${tag}`;
 
-					var etag = settings.generateEtag(hash, settings);
-					settings.cache.set(
-						hash,
-						{
-							content: arguments[0],
-							etag: etag,
-						},
-						new Date(Date.now() + settings.durationMS),
-						err => {
+							settings.cache.get(tagId, [], function(err, tagContents) {
+								tagContents.push(hash);
+								console.log('SET TAG', tag, tagId, tagContents);
+								settings.cache.set(tagId, tagContents, nextTag);
+							});
+						})
+						// }}}
+						// Generate an etag (optional) {{{
+						.then('etag', function(next) {
+							if (!settings.etag) return next();
+							settings.generateEtag(next, hash, settings);
+						})
+						// }}}
+						// Save the response contents into the cache {{{
+						.then(function(next) {
+							settings.cache.set(
+								hash,
+								Object.assign({content}, settings.etag ? {etag: this.etag} : {}),
+								new Date(Date.now() + settings.durationMS),
+								next
+							);
+						})
+						// }}}
+						// Fire 'routeCacheFresh' {{{
+						.then(function(next) {
 							emc.events.emit('routeCacheFresh', req, {
 								isFresh: true,
 								hash: hash,
 							});
-							if (settings.etag) res.set('etag', etag);
-							oldJSONHandler.apply(this, arguments); // Let the downstream serve the data as needed
-						}
-					);
+							next();
+						})
+						// }}}
+						// End - either crash out or revert to the default ExpressJS handler to pass the result onto the upstream {{{
+						.end(function(err) {
+							if (err) {
+								res.status(500).end();
+								throw new Error(err);
+							} else {
+								res.type('application/json');
+								if (settings.etag) res.set('etag', this.etag);
+								oldJSONHandler.call(this.context, content); // Let the downstream serve the data as needed
+							}
+						});
+						// }}}
 				};
 				// }}}
 
@@ -147,18 +153,14 @@ var emc = function(duration, options) {
 					})
 					// }}}
 					 // Erase all ID's assocated with the tag {{{
-					.forEach('tagStore', function(nextStore, store) {
-						async()
-							.forEach(store.hashes, function(next, hash) {
-								store.cache.unset(hash, next);
-							})
-							.then(function(next) {
-								cleared++;
-								next();
-							})
-							.end(nextStore);
+					.forEach('tagStore', function(nextHash, hash) {
+						settings.cache.unset(hash, nextHash);
 					})
 					// }}}
+					.then(function(next) {
+						cleared += this.tagStore.length;
+						next();
+					})
 					.end(nextTag);
 			})
 			.end(err => {
@@ -197,7 +199,7 @@ emc.defaults = {
 	}),
 	cacheFallback: '!!NOCACHE!!', // Dummy value used via @momsfriendlydevco/cache that ensures the return has no value (as the undefined is a valid return for a cache result)
 	etag: true,
-	generateEtag: (hash, settings) => settings.cache.hash(hash + '-' + Date.now()),
+	generateEtag: (next, hash, settings) => next(null, settings.cache.hash(hash + '-' + Date.now())),
 	subscribe: true,
 	tagStorePrefix: 'emc-tagstore',
 };

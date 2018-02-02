@@ -16,7 +16,7 @@ var url = 'http://localhost:' + port;
 describe('Basic cache setup', ()=> {
 
 	// Express Setup {{{
-	before(function(finish) {
+	before('server setup', finish => {
 		this.timeout(10 * 1000);
 
 		app.set('log.indent', '      ');
@@ -42,9 +42,7 @@ describe('Basic cache setup', ()=> {
 		});
 	});
 
-	after(function(finish) {
-		server.close(finish);
-	});
+	after(finish => server.close(finish));
 	// }}}
 
 	[

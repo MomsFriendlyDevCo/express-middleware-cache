@@ -62,7 +62,7 @@ Supported options:
 | `tag`            | `string` / `array` | `''`                 | Optional tag or tags to associate with the cache. These can be used to invalidate the cache later |
 | `tags`           | `string` / `array` | `''`                 | Alias of `tag`                                                                                    |
 | `etag`           | `boolean`          | `true`               | Use eTag compatible caching with backend (only refresh when the server eTag doesn't match)        |
-| `generateEtag`   | `function`         | See internals        | Function used to generate an eTag value                                                           |
+| `generateEtag`   | `function`         | See internals        | Callback-style function used to generate an eTag value. Called as `(cb, hash, settings)`          |
 | `subscribe`      | `boolean`          | `true`               | Subscribe the returned EMC instance to the `emc.events` eventEmitter to react to gloabl events such as calls to `emc.invalidate()` |
 | `tagStorePrefix` | `string`           | `"emc-tagstore"`     | Prefix to use when caching tagStore collections                                                   |
 
