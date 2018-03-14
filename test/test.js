@@ -16,7 +16,7 @@ var url = 'http://localhost:' + port;
 describe('Basic cache setup', ()=> {
 
 	// Express Setup {{{
-	before('server setup', finish => {
+	before('server setup', function(finish) {
 		this.timeout(10 * 1000);
 
 		app.set('log.indent', '      ');
@@ -35,6 +35,10 @@ describe('Basic cache setup', ()=> {
 			res.send({random: _.random(0, 99999999)});
 		});
 
+		app.get('/cache/3000ms', emc('3000ms'), (req, res) => {
+			res.send({random: _.random(0, 99999999)});
+		});
+
 		server = app.listen(port, null, function(err) {
 			if (err) return finish(err);
 			mlog.log('Server listening on ' + url);
@@ -46,9 +50,10 @@ describe('Basic cache setup', ()=> {
 	// }}}
 
 	[
-		{label: '100ms', min: 100, invalidate: 120, max: 500, text: '100ms', url: `${url}/cache/100ms`},
+		// {label: '100ms', min: 100, invalidate: 120, max: 500, text: '100ms', url: `${url}/cache/100ms`}, // Precision <1s is a bit weird with things like MemcacheD so its skipped here
 		{label: '1s', min: 1000, invalidate: 1200, max: 5000, text: '1 second', url: `${url}/cache/1s`},
 		{label: '2 seconds', min: 2000, invalidate: 2200, max: 8000, text: '2 seconds', url: `${url}/cache/2s`},
+		{label: '3000ms', min: 3000, invalidate: 3200, max: 10000, text: '3000ms', url: `${url}/cache/3000ms`},
 	].forEach(time => {
 
 		describe(`should cache something for ${time.text} (${time.label}, invalidated > ${time.invalidate/1000})`, function() {
