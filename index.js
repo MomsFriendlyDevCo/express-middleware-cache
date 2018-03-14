@@ -22,11 +22,7 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 	settings.cache = new cache(settings.cache, err => {
 		if (err) throw new Error('Unable to allocate cache: ' + err.toString());
 	});
-
-
-	settings.cache.on('loadedMod', mod => emc.events.emit('routeCacheCacher', mod))
 	// }}}
-
 
 	/**
 	* Main emcInstance worker
@@ -172,8 +168,12 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 	// Subscribe to event emitter?
 	if (settings.subscribe) emc.events.on('routeCacheInvalidateRequest', (tags, cb) => emcInstance.invalidate(tags, cb));
 
+	// Provided a callback to summon when everything is ready?
+	settings.cache.on('loadedMod', mod => emc.events.emit('routeCacheCacher', mod))
+	if (callback) settings.cache.on('loadedMod', ()=> callback(emcInstance));
+
 	return emcInstance;
-};
+});
 
 
 /**
