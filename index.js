@@ -1,29 +1,18 @@
 var _ = require('lodash');
 var async = require('async-chainable');
+var argy = require('argy');
 var cache = require('@momsfriendlydevco/cache');
 var events = require('events');
 var timestring = require('timestring');
 
 /**
 * Factory function which returns a caching object which returns an the Expres function
-* @param {string} [duration] timestring compatible duration to cache for (sets options.duration)
+* @param {string} [duration='1h'] timestring NPM module compatible duration to cache for (sets options.duration)
 * @param {Object} [options] Additional options to use, overrides emc.defaults
 * @see emc.defaults
 */
-var emc = function(duration, options) {
-	// Argument mangling (sets `settings`) {{{
+var emc = argy('[string] [object] [function]', function(duration, options, callback) {
 	var settings = _.clone(emc.defaults);
-	if (_.isObject(duration)) { // Given object
-		_.merge(settings, duration);
-	} else if (_.isString(duration) && _.isObject(options)) { // Given string + object, assume duration + settings
-		settings.duration = duration;
-		_.merge(settings, options);
-	} else if (_.isString(duration) && _.isUndefined(options)) { // Given string - assume its a duration
-		settings.duration = duration;
-	} else {
-		throw new Error(`Unknown invokation method: ${typeof duration} ${typeof options}`);
-	}
-	// }}}
 
 	// Settings parsing {{{
 	settings.durationMS = timestring(settings.duration) * 1000;
