@@ -64,16 +64,17 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 				var oldJSONHandler = res.json;
 				var servedJSON;
 				res.json = function(content) {
+					var tags = settings.tag || settings.tags;
+					tags = tags ? _.castArray(tags) : [];
+
 					async()
 						.set('context', this)
 						// Store result in tags if we are using them {{{
-						.set('tags', _.castArray(settings.tag || settings.tags))
-						.forEach('tags', function(nextTag, tag) {
+						.forEach(tags, function(nextTag, tag) {
 							var tagId = `${settings.tagStorePrefix}-${tag}`;
 
 							settings.cache.get(tagId, [], function(err, tagContents) {
 								tagContents.push(hash);
-								console.log('SET TAG', tag, tagId, tagContents);
 								settings.cache.set(tagId, tagContents, nextTag);
 							});
 						})
@@ -146,10 +147,17 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 						settings.cache.unset(hash, nextHash);
 					})
 					// }}}
+					// Erase the tag store {{{
+					.then(function(next) {
+						settings.cache.unset(this.tsID, next);
+					})
+					// }}}
+					// Track how many items we've cleared {{{
 					.then(function(next) {
 						cleared += this.tagStore.length;
 						next();
 					})
+					// }}}
 					.end(nextTag);
 			})
 			.end(err => {
