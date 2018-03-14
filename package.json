@@ -24,7 +24,7 @@
   },
   "homepage": "https://github.com/MomsFriendlyDevCo/express-middleware-cache#readme",
   "dependencies": {
-    "@momsfriendlydevco/cache": "^1.0.3",
+    "@momsfriendlydevco/cache": "^1.0.4",
     "async-chainable": "^2.3.2",
     "timestring": "^5.0.0"
   },
