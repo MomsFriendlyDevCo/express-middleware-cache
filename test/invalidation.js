@@ -18,12 +18,10 @@ var url = 'http://localhost:' + port;
 describe('Cache invalidation (same process)', ()=> {
 
 	// EMC Setup {{{
-	before('create EMC instance', ()=> {
-		_.merge(emc.defaults, emcConfig);
-	});
+	before('create EMC instance', done => emc.setup(emcConfig, done));
 
 	before('clear out existing EMC cache', done => {
-		new emc(cacher => cacher.invalidate('1h', done));
+		emc.invalidate('1h', done);
 	});
 	// }}}
 

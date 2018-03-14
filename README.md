@@ -18,6 +18,9 @@ Simple example
 ```javascript
 var cache = require('@momsfriendlydevco/route-cache');
 
+// Setup the cache (configure which modules to try etc.)
+await util.promisify(ache.setup)();
+
 // This route should cache for about about 30 seconds
 app.get('/some/api/hourly', cache('30s'), (req, res) => ...)
 
@@ -75,9 +78,21 @@ The basic cache factory. This function returns Express middleware tuned to the d
 Options extend `cache.defaults`.
 
 
+cache.setup(options, [callback])
+--------------------------------
+Initial setup function. This must be called before the caching system can actually be used.
+
+You can also pass in options that override the defaults.
+
+
 cache.invalidate(...tags)
 -------------------------
 Reset the caching of any cache matching the given tag, array of tags or multiple tags.
+
+
+cache.ready
+-----------
+Boolean indicating if `cache.setup()` has finished its processing.
 
 
 cache.events

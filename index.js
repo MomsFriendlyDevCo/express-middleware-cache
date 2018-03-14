@@ -7,25 +7,21 @@ var timestring = require('timestring');
 
 /**
 * Factory function which returns a caching object which returns an the Expres function
+* NOTE: emc.setup() must have finished before this function is usable
 * @param {string} [duration='1h'] timestring NPM module compatible duration to cache for (sets options.duration)
 * @param {Object} [options] Additional options to use, overrides emc.defaults
 * @see emc.defaults
 */
-var emc = argy('[string] [object] [function]', function(duration, options, callback) {
-	var settings = _.clone(emc.defaults);
+var emc = module.exports = argy('[string] [object]', function(duration, options) {
+	if (!emc.ready) throw new Error('EMC is not yet ready. Call emc.setup(settings, callback) and wait for that before using the cache middleware');
 
-	// Settings parsing {{{
-	settings.durationMS = timestring(settings.duration) * 1000;
-	// }}}
-
-	// Make our caching object {{{
-	settings.cache = new cache(settings.cache, err => {
-		if (err) throw new Error('Unable to allocate cache: ' + err.toString());
-	});
-	// }}}
+	var settings = _.defaults(options, emc.settings); // Note we are inheriting from settings here not the defaults. The user should already have called emc.setup()
+	if (duration) settings.duration = duration;
+	settings.durationMS = timestring(settings.duration || '1h') * 1000;
 
 	/**
-	* Main emcInstance worker
+	* Main emcInstance factory
+	* Calling the main emc() function should return an ExpressJS compatible middleware function which is composed in the form (req, res, next)
 	* @param {Object} req The ExpressJS compatible request object
 	* @param {Object} res The ExpressJS comaptible response object
 	* @param {function} next The upstream callback to pass control to the next middleware
@@ -35,20 +31,20 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 		emc.events.emit('routeCacheHit', req);
 		// }}}
 
-		var hash = settings.cache.hash(settings.hashObject(req));
+		var hash = emc.cache.hash(settings.hashObject(req));
 
-		settings.cache.get(hash, settings.cacheFallback, (err, cacheRes) => {
+		emc.cache.get(hash, emc.cacheFallback, (err, cacheRes) => {
 			if (err) {
 				console.log('Error while computing hash', err);
 				emc.events.emit('routeCacheHashError', err, req);
 				return res.sendStatus(500);
-			} else if (settings.etag && req.headers.etag && cacheRes !== settings.cacheFallback && cacheRes.etag && cacheRes.etag == req.headers.etag) { // User is supplying an etag - compare it agasint the one we have cached
+			} else if (settings.etag && req.headers.etag && cacheRes !== emc.cacheFallback && cacheRes.etag && cacheRes.etag == req.headers.etag) { // User is supplying an etag - compare it agasint the one we have cached
 				emc.events.emit('routeCacheEtag', req, {
 					isFresh: false,
 					hash: hash,
 				});
 				return res.sendStatus(304);
-			} else if (cacheRes !== settings.cacheFallback) { // Got a hit
+			} else if (cacheRes !== emc.cacheFallback) { // Got a hit
 				emc.events.emit('routeCacheExisting', req, {
 					isFresh: false,
 					hash: hash,
@@ -69,9 +65,9 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 						.forEach(tags, function(nextTag, tag) {
 							var tagId = `${settings.tagStorePrefix}-${tag}`;
 
-							settings.cache.get(tagId, [], function(err, tagContents) {
+							emc.cache.get(tagId, [], function(err, tagContents) {
 								tagContents.push(hash);
-								settings.cache.set(tagId, tagContents, nextTag);
+								emc.cache.set(tagId, tagContents, nextTag);
 							});
 						})
 						// }}}
@@ -83,7 +79,7 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 						// }}}
 						// Save the response contents into the cache {{{
 						.then(function(next) {
-							settings.cache.set(
+							emc.cache.set(
 								hash,
 								Object.assign({content}, settings.etag ? {etag: this.etag} : {}),
 								new Date(Date.now() + settings.durationMS),
@@ -120,59 +116,45 @@ var emc = argy('[string] [object] [function]', function(duration, options, callb
 		});
 	};
 
-	/**
-	* Invalidate all matching tags - effectively clearing the internal cache for anything matching the query
-	* @param {array|string} tags The tag or tag strings to match against
-	* @param {function} cb Callback to call as (err, clearedCount) when complete
-	* @return {number} The number of cache hashes cleared (this does not necessarily equal the number of items removed from memory as some of the cleared items may already have expired depending on the individual cache modules used)
-	*/
-	emcInstance.invalidate = (tags, cb) => {
-		var cleared = 0;
-
-		async()
-			.forEach(_.castArray(tags), function(nextTag, tag) {
-				async()
-					// Fetch tag store {{{
-					.set('tsID', `${settings.tagStorePrefix}-${tag}`)
-					.then('tagStore', function(next) {
-						settings.cache.get(this.tsID, [], next);
-					})
-					// }}}
-					 // Erase all ID's assocated with the tag {{{
-					.forEach('tagStore', function(nextHash, hash) {
-						settings.cache.unset(hash, nextHash);
-					})
-					// }}}
-					// Erase the tag store {{{
-					.then(function(next) {
-						settings.cache.unset(this.tsID, next);
-					})
-					// }}}
-					// Track how many items we've cleared {{{
-					.then(function(next) {
-						cleared += this.tagStore.length;
-						next();
-					})
-					// }}}
-					.end(nextTag);
-			})
-			.end(err => {
-				if (_.isFunction(cb)) {
-					cb(err, cleared)
-				} else if (err) {
-					throw new Error(err);
-				}
-			});
-	};
-
-	// Subscribe to event emitter?
-	if (settings.subscribe) emc.events.on('routeCacheInvalidateRequest', (tags, cb) => emcInstance.invalidate(tags, cb));
-
-	// Provided a callback to summon when everything is ready?
-	settings.cache.on('loadedMod', mod => emc.events.emit('routeCacheCacher', mod))
-	if (callback) settings.cache.on('loadedMod', ()=> callback(emcInstance));
-
 	return emcInstance;
+});
+
+
+/**
+* Caching driver to use
+* See the NPM @momsfriendlydevco/cache
+* NOTE: This is asyncronously loaded so we can't expect it to be immediately available - hence why we have to wait for emc.setup() to finish
+* @var {Object}
+*/
+emc.cache;
+
+
+/**
+* Simple marker to deterine if this instance of EMC has had time to boot yet
+* @var {boolean}
+*/
+emc.ready = false;
+
+
+/**
+* Init the module, loading a cache
+* Options provided override the defaults
+* NOTE: Because the upstream cache has to load its drivers we have to wait for this function to finish before we can use the main callback. Attach a callback to this function to determine when ready.
+* @param {Object} [options] Options to use for the module. See emc.defaults
+* @param {function} [cb] Callback to run when the upstream caching module has finished. Callback called as (err, emc)
+* @returns {Object} This chainable object
+*/
+emc.setup = argy('[object] [function]', function(options, callback) {
+	// Set this modules settings, if given any to merge
+	emc.settings = _.defaults(options, emc.defaults);
+
+	// Make our caching object
+	emc.cache = new cache(emc.settings, err => {
+		emc.ready = true;
+		if (callback) callback(err, emc);
+	});
+
+	return emc;
 });
 
 
@@ -196,18 +178,66 @@ emc.defaults = {
 	}),
 	cacheFallback: '!!NOCACHE!!', // Dummy value used via @momsfriendlydevco/cache that ensures the return has no value (as the undefined is a valid return for a cache result)
 	etag: true,
-	generateEtag: (next, hash, settings) => next(null, settings.cache.hash(hash + '-' + Date.now())),
-	subscribe: true,
+	generateEtag: (next, hash, settings) => next(null, emc.cache.hash(hash + '-' + Date.now())),
 	tagStorePrefix: 'emc-tagstore',
 };
 
 
 /**
-* Function to invoke 'invalidate' on all EMC objects subscribed to the emc.events EventEmitter
-* @param {array|string} tags Tag or tags to invalidate
-* @param {function} [cb] Optional callback to fire when complete
+* The current instances settings
+* This is usually inherited from emc.defaults unless a specific setting is overridden
+* @see emc.defaults
+* @var {Object}
 */
-emc.invalidate = (tags, cb) => emc.events.emit('routeCacheInvalidateRequest', tags, cb);
+emc.settings = _.clone(emc.defaults);
+
+
+/**
+* Invalidate all matching tags - effectively clearing the internal cache for anything matching the query
+* @param {array|string} tags The tag or tag strings to match against
+* @param {function} [cb] Callback to call as (err, clearedCount) when complete
+* @return {Object} This chainable object
+*/
+emc.invalidate = function(tags, cb) {
+	var cleared = 0;
+
+	async()
+		.forEach(_.castArray(tags), function(nextTag, tag) {
+			async()
+				// Fetch tag store {{{
+				.set('tsID', `${emc.settings.tagStorePrefix}-${tag}`)
+				.then('tagStore', function(next) {
+					emc.cache.get(this.tsID, [], next);
+				})
+				// }}}
+				 // Erase all ID's assocated with the tag {{{
+				.forEach('tagStore', function(nextHash, hash) {
+					emc.cache.unset(hash, nextHash);
+				})
+				// }}}
+				// Erase the tag store {{{
+				.then(function(next) {
+					emc.cache.unset(this.tsID, next);
+				})
+				// }}}
+				// Track how many items we've cleared {{{
+				.then(function(next) {
+					cleared += this.tagStore.length;
+					next();
+				})
+				// }}}
+				.end(nextTag);
+		})
+		.end(err => {
+			if (_.isFunction(cb)) {
+				cb(err, cleared)
+			} else if (err) {
+				throw new Error(err);
+			}
+		});
+
+	return emc;
+};
 
 
 /**
@@ -215,5 +245,3 @@ emc.invalidate = (tags, cb) => emc.events.emit('routeCacheInvalidateRequest', ta
 * @var {EventEmitter}
 */
 emc.events = new events.EventEmitter();
-
-module.exports = emc;

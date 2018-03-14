@@ -1,6 +1,7 @@
 var _ = require('lodash');
 var bodyParser = require('body-parser');
 var emc = require('..');
+var emcConfig = require('./config');
 var expect = require('chai').expect;
 var express = require('express');
 var expressLogger = require('express-log-url');
@@ -13,7 +14,11 @@ var server;
 var port = 8181;
 var url = 'http://localhost:' + port;
 
-describe('Basic cache setup', ()=> {
+describe('Caching scenarios', ()=> {
+
+	// EMC Setup {{{
+	before('setup EMC', done => emc.setup(emcConfig, done));
+	// }}}
 
 	// Express Setup {{{
 	before('server setup', function(finish) {
