@@ -4,6 +4,6 @@
 */
 module.exports = {
 	cache: {
-		modules: ['memory'],
+		modules: ['memcached'],
 	},
 };
