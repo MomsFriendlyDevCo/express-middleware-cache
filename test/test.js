@@ -136,7 +136,7 @@ describe('Caching scenarios', ()=> {
 	});
 	// }}}
 
-	it.only('should support dynamic tags', done => {
+	it('should support dynamic tags', done => {
 		// Initial hit
 		var responses = [];
 		superagent.get(`${url}/cache/customTag/foo`).end((err, res) => {
