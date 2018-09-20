@@ -62,7 +62,7 @@ Supported options:
 | `duration`       | `string`           | `1h`                 | Default duration to cache for                                                                     |
 | `cache`          | `object`           | `{}`                 | Options passed to [@momsfriendlydevco/cache](https://github.com/MomsFriendlyDevCo/generic-cache) to setup a cache instance |
 | `hashObject`     | `function`         | See internals        | Method which returns the hashable object to use as the key in the cache. Defaults to hashing `req.{method,path,query,body}` |
-| `tag`            | `string` / `array` | `''`                 | Optional tag or tags to associate with the cache. These can be used to invalidate the cache later |
+| `tag`            | `string` / `array` | `''`                 | Optional tag or tags to associate with the cache. These can be used to invalidate the cache later. If any member is a function it is called as `(req, res)` and expected to return a string |
 | `tags`           | `string` / `array` | `''`                 | Alias of `tag`                                                                                    |
 | `etag`           | `boolean`          | `true`               | Use eTag compatible caching with backend (only refresh when the server eTag doesn't match)        |
 | `generateEtag`   | `function`         | See internals        | Callback-style function used to generate an eTag value. Called as `(cb, hash, settings)`          |

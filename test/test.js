@@ -44,6 +44,16 @@ describe('Caching scenarios', ()=> {
 			res.send({random: _.random(0, 99999999)});
 		});
 
+		app.get('/cache/customTag/:tag', emc('1h', {tag: req => req.params.tag}), (req, res) => {
+			res.send({tag: req.params.tag, random: _.random(0, 99999999)});
+		});
+
+		app.get('/cache/invalidate/:tag', (req, res) => {
+			emc.invalidate(req.params.tag, err => {
+				res.send({error: err});
+			});
+		});
+
 		server = app.listen(port, null, function(err) {
 			if (err) return finish(err);
 			mlog.log('Server listening on ' + url);
@@ -54,6 +64,7 @@ describe('Caching scenarios', ()=> {
 	after(finish => server.close(finish));
 	// }}}
 
+	// Ping various endpoints with different cache expiry times {{{
 	[
 		// {label: '100ms', min: 100, invalidate: 120, max: 500, text: '100ms', url: `${url}/cache/100ms`}, // Precision <1s is a bit weird with things like MemcacheD so its skipped here
 		{label: '1s', min: 1000, invalidate: 1200, max: 5000, text: '1 second', url: `${url}/cache/1s`},
@@ -122,6 +133,38 @@ describe('Caching scenarios', ()=> {
 
 		});
 
+	});
+	// }}}
+
+	it.only('should support dynamic tags', done => {
+		// Initial hit
+		var responses = [];
+		superagent.get(`${url}/cache/customTag/foo`).end((err, res) => {
+			if (err) return done(err);
+			responses.push(res.body);
+
+			// Request clear
+			superagent.get(`${url}/cache/invalidate/foo`).end((err, res) => {
+				if (err) return done(err);
+				responses.push(res.body);
+
+				superagent.get(`${url}/cache/customTag/foo`).end((err, res) => {
+					if (err) return done(err);
+					responses.push(res.body);
+
+					expect(responses).to.have.length(3);
+					expect(responses).to.have.nested.property('0.tag', 'foo');
+					expect(responses).to.have.nested.property('0.random');
+					expect(responses).to.have.nested.property('2.tag', 'foo');
+					expect(responses).to.have.nested.property('2.random');
+
+					expect(responses[2].random).to.not.equal(responses[1].random);
+
+					done();
+				});
+			});
+
+		});
 	});
 
 });

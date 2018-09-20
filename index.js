@@ -58,6 +58,7 @@ var emc = module.exports = argy('[string] [object]', function(duration, options)
 				res.json = function(content) {
 					var tags = settings.tag || settings.tags;
 					tags = tags ? _.castArray(tags) : [];
+					tags.forEach(t => _.isFunction(t) ? t(req, res) : t); // Flatten functions
 
 					async()
 						.set('context', this)
