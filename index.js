@@ -56,6 +56,11 @@ var emc = module.exports = argy('[string] [object]', function(duration, options)
 				var oldJSONHandler = res.json;
 				var servedJSON;
 				res.json = function(content) {
+					// Does cacheQuery reject us caching this?
+					if (!settings.cacheQuery(req, res, content)) {
+						return oldJSONHandler.call(this, content); // Let the downstream serve the data as needed
+					}
+
 					var tags = settings.tag || settings.tags;
 					tags = tags ? _.castArray(tags) : [];
 					tags.forEach(t => _.isFunction(t) ? t(req, res) : t); // Flatten functions
@@ -181,6 +186,7 @@ emc.defaults = {
 	etag: true,
 	generateEtag: (next, hash, settings) => next(null, emc.cache.hash(hash + '-' + Date.now())),
 	tagStorePrefix: 'emc-tagstore',
+	cacheQuery: (req, res, content) => true,
 };
 
 

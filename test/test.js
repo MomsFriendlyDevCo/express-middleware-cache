@@ -48,6 +48,13 @@ describe('Caching scenarios', ()=> {
 			res.send({tag: req.params.tag, random: _.random(0, 99999999)});
 		});
 
+		app.get('/cache/selective/:code', emc('1h', {tag: 'selective', cacheQuery: (req, res, content) => res.statusCode == 200}), (req, res) => {
+			res.status(req.params.code).send({
+				code: new Number(req.params.code),
+				random: _.random(0, 99999999),
+			});
+		});
+
 		app.get('/cache/invalidate/:tag', (req, res) => {
 			emc.invalidate(req.params.tag, err => {
 				res.send({error: err});
@@ -165,6 +172,43 @@ describe('Caching scenarios', ()=> {
 			});
 
 		});
+	});
+
+	it('should cache only when the response is 200 (custom behaviour)', ()=> {
+		// Initial hit
+		var responses = [];
+		return Promise.resolve()
+			.then(()=> superagent.get(`${url}/cache/selective/200`))
+			.then(res => {
+				expect(res.body).to.be.an('object');
+				expect(res.body).to.have.property('code', 200);
+				expect(res.body).to.have.property('random');
+				responses.push(res.body);
+			})
+			.then(()=> superagent.get(`${url}/cache/selective/200`))
+			.then(res => {
+				expect(res.body).to.be.an('object');
+				expect(res.body).to.have.property('code', 200);
+				expect(res.body).to.have.property('random', responses[0].random);
+				responses.push(res.body);
+			})
+			.then(()=> superagent.get(`${url}/cache/invalidate/selective`))
+			.then(()=> superagent.get(`${url}/cache/selective/202`))
+			.then(res => {
+				expect(res.body).to.be.an('object');
+				expect(res.body).to.have.property('code', 202);
+				expect(res.body).to.have.property('random');
+				responses.push(res.body);
+			})
+			.then(()=> superagent.get(`${url}/cache/selective/202`))
+			.then(res => {
+				expect(res.body).to.be.an('object');
+				expect(res.body).to.have.property('code', 202);
+				expect(res.body).to.have.property('random');
+				expect(res.body.random).to.not.equal(responses[2].random);
+				responses.push(res.body);
+			})
+			.catch(e => expect.fail(e))
 	});
 
 });
