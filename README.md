@@ -19,7 +19,7 @@ Simple example
 var cache = require('@momsfriendlydevco/route-cache');
 
 // Setup the cache (configure which modules to try etc.)
-await util.promisify(ache.setup)();
+await util.promisify(cache.setup)();
 
 // This route should cache for about about 30 seconds
 app.get('/some/api/hourly', cache('30s'), (req, res) => ...)
