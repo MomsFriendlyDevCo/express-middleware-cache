@@ -1,4 +1,5 @@
 var _ = require('lodash');
+var axios = require('axios');
 var bodyParser = require('body-parser');
 var emc = require('..');
 var emcConfig = require('./config');
@@ -7,7 +8,6 @@ var expect = require('chai').expect;
 var express = require('express');
 var expressLogger = require('express-log-url');
 var mlog = require('mocha-logger');
-var superagent = require('superagent');
 
 var app = express();
 var server;
@@ -20,9 +20,9 @@ describe('Cache invalidation (same process)', ()=> {
 	// EMC Setup {{{
 	before('create EMC instance', done => emc.setup(emcConfig, done));
 
-	before('clear out existing EMC cache', done => {
-		emc.invalidate('1h', done);
-	});
+	before('clear out existing EMC cache', done =>
+		emc.invalidate('tag-1h', done)
+	);
 	// }}}
 
 	// Express Setup {{{
@@ -33,7 +33,7 @@ describe('Cache invalidation (same process)', ()=> {
 		app.use(bodyParser.json());
 		app.set('log.indent', '      ');
 
-		app.get('/cache/1h', emc('1h', {tag: '1h'}), (req, res) => res.send({random: _.random(0, 99999999)}));
+		app.get('/cache/1h', emc('1h', {tag: 'tag-1h'}), (req, res) => res.send({random: _.random(0, 99999999)}));
 
 		server = app.listen(port, null, function(err) {
 			if (err) return finish(err);
@@ -66,76 +66,80 @@ describe('Cache invalidation (same process)', ()=> {
 	});
 	// }}}
 
+	// Axios config {{{
+	before('Axios setup', ()=> {
+		axios.defaults.headers.common.Accept = 'application/json';
+		axios.defaults.validateStatus = status => {
+			return status >= 200 && status < 400; // Override 200 range only to also accept 3??
+		};
+	});
+	// }}}
+
 	var lastRes;
-	it('should cache something for 1 hour', done => {
-		superagent.get(`${url}/cache/1h`)
-			.end((err, res) => {
-				expect(err).to.not.be.ok;
-				expect(res.body).to.have.property('random');
+	it('should cache something for 1 hour', ()=>
+		axios.get(`${url}/cache/1h`)
+			.then(res => {
+				expect(res.status).to.be.equal(200);
+				expect(res.data).to.have.property('random');
 				lastRes = res;
-				done();
-			});
-	});
+			})
+	);
 
-	it('should get the same response within 1h', done => {
-		superagent.get(`${url}/cache/1h`)
-			.end((err, res) => {
-				expect(err).to.not.be.ok;
-				expect(res.statusCode).to.be.equal(200);
-				expect(res.body).to.have.property('random');
+	it('should get the same response within 1h', ()=>
+		axios.get(`${url}/cache/1h`)
+			.then(res => {
+				expect(res.status).to.be.equal(200);
+				expect(res.data).to.have.property('random');
 				expect(res.headers).to.have.property('etag');
-				expect(res.body.random).to.equal(lastRes.body.random);
-				done();
-			});
-	});
+				expect(res.data.random).to.equal(lastRes.data.random);
+			})
+	);
 
-	it('should get the same response if provided with the same etag', done => {
-		superagent.get(`${url}/cache/1h`)
-			.set('etag', lastRes.headers.etag)
-			.end((err, res) => {
-				expect(err).to.be.ok; // Not modified
-				expect(res.statusCode).to.be.equal(304);
-				expect(res.body).to.be.deep.equal({});
-				done();
-			});
-	});
+	it('should get the same response if provided with the same etag', ()=>
+		axios.get(`${url}/cache/1h`, {
+			headers: {
+				etag: lastRes.headers.etag,
+			},
+		})
+			.then(res => {
+				expect(res.status).to.be.equal(304);
+				expect(res.data).to.be.deep.equal('');
+			})
+	);
 
-	it('should get a full response if provided with a different etag', done => {
-		superagent.get(`${url}/cache/1h`)
-			.set('etag', 'nonsense-etag')
-			.end((err, res) => {
-				expect(err).to.not.be.ok;
-				expect(res.statusCode).to.be.equal(200);
-				expect(res.body).to.have.property('random');
-				expect(res.body.random).to.equal(lastRes.body.random);
-				done();
-			});
-	});
+	it('should get a full response if provided with a different etag', ()=>
+		axios.get(`${url}/cache/1h`, {
+			headers: {
+				etag: 'nonsense-etag',
+			},
+		})
+			.then(res => {
+				expect(res.status).to.be.equal(200);
+				expect(res.data).to.have.property('random');
+				expect(res.data.random).to.equal(lastRes.data.random);
+			})
+	);
 
-	it('should invalidate the cache', done => {
-		emc.invalidate('1h', done);
-	});
+	it('should invalidate the cache', done =>
+		emc.invalidate('tag-1h', done)
+	);
 
-	it('should get a different request post-invalidation', done => {
-		superagent.get(`${url}/cache/1h`)
-			.end((err, res) => {
-				expect(err).to.not.be.ok;
-				expect(res.body).to.have.property('random');
-				expect(res.body.random).to.not.equal(lastRes.body.random);
+	it('should get a different request post-invalidation', ()=>
+		axios.get(`${url}/cache/1h`)
+			.then(res => {
+				expect(res.data).to.have.property('random');
+				expect(res.data.random).to.not.equal(lastRes.data.random);
 				lastRes = res;
-				done();
-			});
-	});
+			})
+	);
 
-	it('should get the same response again', done => {
-		superagent.get(`${url}/cache/1h`)
-			.end((err, res) => {
-				expect(err).to.not.be.ok;
-				expect(res.body).to.have.property('random');
-				expect(res.body.random).to.equal(lastRes.body.random);
-				done();
-			});
-	});
+	it('should get the same response again', ()=>
+		axios.get(`${url}/cache/1h`)
+			.then(res => {
+				expect(res.data).to.have.property('random');
+				expect(res.data.random).to.equal(lastRes.data.random);
+			})
+	);
 
 	it('should have fired the correct number of event handlers', ()=> {
 		expect(events.routeCacheHit).to.have.length(6);

@@ -1,4 +1,5 @@
 var _ = require('lodash');
+var axios = require('axios');
 var bodyParser = require('body-parser');
 var emc = require('..');
 var emcConfig = require('./config');
@@ -6,7 +7,6 @@ var expect = require('chai').expect;
 var express = require('express');
 var expressLogger = require('express-log-url');
 var mlog = require('mocha-logger');
-var superagent = require('superagent');
 
 var app = express();
 var server;
@@ -83,34 +83,24 @@ describe('Caching scenarios', ()=> {
 			this.timeout(time.max);
 
 			var responses = [];
-			it(`should make the initial request < ${time.min} (uncached)`, done => {
-				superagent
-					.get(time.url)
-					.end((err, res) => {
-						if (err) return done(err);
-						responses.push(res);
-						done();
-					});
-			});
+			it(`should make the initial request < ${time.min} (uncached)`, ()=>
+				axios.get(time.url)
+					.then(res => responses.push(res))
+			);
 
 			it('should have a valid response the first time', ()=> {
-				expect(responses[0].body).to.have.property('random');
+				expect(responses[0].data).to.have.property('random');
 				expect(responses[0].headers).to.have.property('etag');
 			});
 
-			it(`should make the second request (within cache range)`, done => {
-				superagent
-					.get(time.url)
-					.end((err, res) => {
-						if (err) return done(err);
-						responses.push(res);
-						done();
-					});
-			});
+			it(`should make the second request (within cache range)`, ()=>
+				axios.get(time.url)
+					.then(res => responses.push(res))
+			);
 
 			it('should have a valid response the second time', ()=> {
-				expect(responses[1].body).to.have.property('random');
-				expect(responses[1].body.random).to.equal(responses[0].body.random);
+				expect(responses[1].data).to.have.property('random');
+				expect(responses[1].data.random).to.equal(responses[0].data.random);
 				expect(responses[1].headers).to.have.property('etag');
 				expect(responses[1].headers.etag).to.equal(responses[0].headers.etag);
 			});
@@ -120,19 +110,14 @@ describe('Caching scenarios', ()=> {
 			});
 
 
-			it('should make the third request (after cache range)', done => {
-				superagent
-					.get(time.url)
-					.end((err, res) => {
-						if (err) return done(err);
-						responses.push(res);
-						done();
-					});
-			});
+			it('should make the third request (after cache range)', ()=>
+				axios.get(time.url)
+					.then(res => responses.push(res))
+			);
 
 			it('should have a valid response the third time', ()=> {
-				expect(responses[2].body).to.have.property('random');
-				expect(responses[2].body.random).to.not.equal(responses[0].body.random);
+				expect(responses[2].data).to.have.property('random');
+				expect(responses[2].data.random).to.not.equal(responses[0].data.random);
 				expect(responses[2].headers).to.have.property('etag');
 				// FIXME: Should etag be identical or different after invalidation - MC 2017-11-22
 				// expect(responses[2].headers.etag).to.not.equal(responses[1].headers.etag);
@@ -143,70 +128,60 @@ describe('Caching scenarios', ()=> {
 	});
 	// }}}
 
-	it('should support dynamic tags', done => {
+	it('should support dynamic tags', ()=> {
 		// Initial hit
 		var responses = [];
-		superagent.get(`${url}/cache/customTag/foo`).end((err, res) => {
-			if (err) return done(err);
-			responses.push(res.body);
+		return Promise.resolve()
+			.then(()=> axios.get(`${url}/cache/customTag/foo`))
+			.then(({data}) => responses.push(data))
+			.then(()=> axios.get(`${url}/cache/invalidate/foo`)) // Request clear
+			.then(({data}) => responses.push(data))
+			.then(()=> axios.get(`${url}/cache/customTag/foo`))
+			.then(({data}) => responses.push(data))
+			.then(()=> {
+				expect(responses).to.have.length(3);
+				expect(responses).to.have.nested.property('0.tag', 'foo');
+				expect(responses).to.have.nested.property('0.random');
+				expect(responses).to.have.nested.property('2.tag', 'foo');
+				expect(responses).to.have.nested.property('2.random');
 
-			// Request clear
-			superagent.get(`${url}/cache/invalidate/foo`).end((err, res) => {
-				if (err) return done(err);
-				responses.push(res.body);
-
-				superagent.get(`${url}/cache/customTag/foo`).end((err, res) => {
-					if (err) return done(err);
-					responses.push(res.body);
-
-					expect(responses).to.have.length(3);
-					expect(responses).to.have.nested.property('0.tag', 'foo');
-					expect(responses).to.have.nested.property('0.random');
-					expect(responses).to.have.nested.property('2.tag', 'foo');
-					expect(responses).to.have.nested.property('2.random');
-
-					expect(responses[2].random).to.not.equal(responses[1].random);
-
-					done();
-				});
+				expect(responses[2].random).to.not.equal(responses[1].random);
 			});
-
-		});
 	});
 
 	it('should cache only when the response is 200 (custom behaviour)', ()=> {
 		// Initial hit
 		var responses = [];
 		return Promise.resolve()
-			.then(()=> superagent.get(`${url}/cache/selective/200`))
+			.then(()=> axios.get(`${url}/cache/selective/200`))
 			.then(res => {
-				expect(res.body).to.be.an('object');
-				expect(res.body).to.have.property('code', 200);
-				expect(res.body).to.have.property('random');
-				responses.push(res.body);
+				expect(res.data).to.be.an('object');
+				expect(res.data).to.have.property('code', 200);
+				expect(res.data).to.have.property('random');
+				responses.push(res.data);
 			})
-			.then(()=> superagent.get(`${url}/cache/selective/200`))
+			.then(()=> axios.get(`${url}/cache/selective/200`))
 			.then(res => {
-				expect(res.body).to.be.an('object');
-				expect(res.body).to.have.property('code', 200);
-				expect(res.body).to.have.property('random', responses[0].random);
-				responses.push(res.body);
+				expect(res.data).to.be.an('object');
+				expect(res.data).to.have.property('code', 200);
+				expect(res.data).to.have.property('random', responses[0].random);
+				responses.push(res.data);
 			})
-			.then(()=> superagent.get(`${url}/cache/invalidate/selective`))
-			.then(()=> superagent.get(`${url}/cache/selective/202`))
+			.then(()=> axios.get(`${url}/cache/invalidate/selective`))
+			.then(()=> axios.get(`${url}/cache/selective/202`))
 			.then(res => {
-				expect(res.body).to.be.an('object');
-				expect(res.body).to.have.property('code', 202);
-				expect(res.body).to.have.property('random');
-				responses.push(res.body);
+				expect(res.data).to.be.an('object');
+				expect(res.data).to.have.property('code', 202);
+				expect(res.data).to.have.property('random');
+				responses.push(res.data);
 			})
-			.then(()=> superagent.get(`${url}/cache/selective/202`))
+			.then(()=> axios.get(`${url}/cache/selective/202`))
 			.then(res => {
-				expect(res.body).to.be.an('object');
-				expect(res.body).to.have.property('code', 202);
-				expect(res.body).to.have.property('random');
-				expect(res.body.random).to.not.equal(responses[2].random);
-				responses.push(res.body);
+				expect(res.data).to.be.an('object');
+				expect(res.data).to.have.property('code', 202);
+				expect(res.data).to.have.property('random');
+				expect(res.data.random).to.not.equal(responses[2].random);
+				responses.push(res.data);
 			})
 			.catch(e => expect.fail(e))
 	});
