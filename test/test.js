@@ -44,6 +44,15 @@ describe('Caching scenarios', ()=> {
 			res.send({random: _.random(0, 99999999)});
 		});
 
+		app.get('/cache/marshal', emc('3000ms'), (req, res) => {
+			res.send({
+				random: _.random(0, 99999999),
+				2024: new Date('2024-01-01'),
+				boolTrue: true,
+				undef: undefined,
+			});
+		});
+
 		app.get('/cache/customTag/:tag', emc('1h', {tag: req => req.params.tag}), (req, res) => {
 			res.send({tag: req.params.tag, random: _.random(0, 99999999)});
 		});
@@ -185,5 +194,28 @@ describe('Caching scenarios', ()=> {
 			})
 			.catch(e => expect.fail(e))
 	});
+
+	it.only('should cache + restore marshaled values', ()=> Promise.resolve()
+		.then(()=> axios.get(`${url}/cache/marshal`))
+		.then(({data}) => {
+			expect(data).to.have.property('2024');
+			expect(data).to.have.property('random');
+			expect(data).to.have.property('boolTrue', true);
+			expect(data).to.not.have.property('undef');
+			expect(data['2024']).to.match(/^2024-01-01T/);
+
+			return data.random;
+		})
+		.then(oldRandom => axios.get(`${url}/cache/marshal`)
+			.then(({data}) => ({data, oldRandom}))
+		) // Second hit should be the cache
+		.then(({data, oldRandom}) => {
+			expect(data).to.have.property('2024');
+			expect(data).to.have.property('random', oldRandom);
+			expect(data).to.have.property('boolTrue', true);
+			expect(data['2024']).to.match(/^2024-01-01T/);
+			expect(data).to.not.have.property('undef');
+		})
+	);
 
 });
